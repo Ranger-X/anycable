@@ -47,6 +47,10 @@ module AnyCable
       version_check_enabled: true
     )
 
+    if respond_to?(:coerce_types)
+      coerce_types redis_sentinels: {type: nil, array: true}, debug: :boolean, version_check_enabled: :boolean
+    end
+
     alias_method :version_check_enabled?, :version_check_enabled
 
     ignore_options :rpc_server_args
@@ -97,14 +101,17 @@ module AnyCable
 
     # Build Redis parameters
     def to_redis_params
-      {url: redis_url}.tap do |params|
-        next if redis_sentinels.nil? || redis_sentinels.empty?
+      # @type var base_params: { url: String, sentinels: Array[untyped]?, ssl_params: Hash[Symbol, untyped]? }
+      base_params = {url: redis_url}
+      base_params.tap do |params|
+        sentinels = redis_sentinels
+        next if sentinels.nil? || sentinels.empty?
 
-        sentinels = Array(redis_sentinels)
+        sentinels = Array(sentinels) unless sentinels.is_a?(Array)
 
         next if sentinels.empty?
 
-        params[:sentinels] = sentinels.map(&method(:parse_sentinel))
+        params[:sentinels] = sentinels.map { |sentinel| parse_sentinel(sentinel) }
       end.tap do |params|
         next unless redis_url.match?(/rediss:\/\//)
 
